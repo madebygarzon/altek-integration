@@ -87,7 +87,7 @@ SKU-ABC-999
 
 ## ✍️ Autor
 
-Desarrollado por **Carlos Garzón**  
-Software Engineer Fullstack Web Developer.
+- Desarrollado por **Carlos Garzón**  
+- Software Engineer Fullstack Web Developer.
 ---
 
