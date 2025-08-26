@@ -42,7 +42,7 @@ Allí encontrarás los siguientes campos configurables:
 
 - **Endpoint ALTEK**  
 URL de la API de ALTEK que recibirá los pedidos.  
-Ejemplo: `https://altek.midominio.com/api/orders`
+Ejemplo: `https://endppoint.com/api/orders`
 
 - **API Key**  
 Token o clave de acceso proporcionada por ALTEK. El plugin la enviará por defecto en la cabecera `Authorization: Bearer`.
