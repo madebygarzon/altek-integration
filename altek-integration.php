@@ -512,6 +512,28 @@ class WC_Altek_Integration {
         $logger = wc_get_logger();
         $logger->info($message, ['source' => self::LOG_SOURCE]);
     }
+    // (EN) Add an icon on our custom action keeping the label visible
+    add_action('admin_head', function () {
+        // (EN) Limit to Orders list screen
+        if ( function_exists('get_current_screen') ) {
+            $screen = get_current_screen();
+            if ( ! $screen || $screen->id !== 'edit-shop_order' ) return;
+        }
+        ?>
+        <style>
+          /* (EN) Target our button with high specificity */
+          a.button.wc-action-button.wc-action-button-altek-send-order.altek-send-order::after {
+            /* (EN) Use Dashicons glyph (export/migrate); change code if you prefer another */
+            content: "\f19f" !important;
+            font-family: Dashicons !important;
+            font-size: 16px;
+            line-height: 1;
+            vertical-align: middle;
+            margin-left: .35em;
+          }
+        </style>
+        <?php
+    });
 }
 
 new WC_Altek_Integration();
