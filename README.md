@@ -45,7 +45,7 @@ URL de la API de ALTEK que recibirá los pedidos.
 Ejemplo: `https://endpoint.com/api/orders`
 
 - **API Key**  
-Token o clave de acceso proporcionada por ALTEK. El plugin la enviará por defecto en la cabecera `Authorization: Bearer`.
+Token o clave de acceso. El plugin la enviará por defecto en la cabecera `Authorization: Bearer`.
 
 - **Timeout (segundos)**  
 Tiempo máximo de espera para la conexión con ALTEK. Por defecto: `20`.
@@ -81,21 +81,13 @@ SKU-ABC-999
 
 - No dejar credenciales ni endpoints “quemados” en el código; siempre usar la página de ajustes.  
 - El envío se realiza **server-to-server** desde WordPress, sin exponer credenciales al cliente.  
-- Solo los usuarios con capacidad `manage_woocommerce` pueden ejecutar los envíos.  
-
----
-
-## 🧩 Personalización
-
-- **Cabeceras HTTP**: si ALTEK requiere un header distinto a `Authorization: Bearer`, puedes modificar la función `altek_remote_post()`.  
-- **Formato del payload**: si ALTEK solicita un JSON específico, ajusta la función `altek_build_payload()`.  
-- **Logs**: revisa WooCommerce → Estado → Registros (`altek-integration-*`) para validar los envíos.  
+- Solo los usuarios con capacidad `manage_woocommerce` pueden ejecutar los envíos.   
 
 ---
 
 ## ✍️ Autor
 
-Desarrollado por **Ingeniero Carlos Garzón**  
-Fullstack Developer.
+Desarrollado por **Carlos Garzón**  
+Software Engineer Fullstack Web Developer.
 ---
 
