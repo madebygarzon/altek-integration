@@ -1,6 +1,6 @@
 # ALTEK Integration for WooCommerce
 
-**Autor:** Dev Carlos Garzón  
+**Autor:** Ing. Carlos Garzón  
 **Versión:** 1.0.0  
 **Licencia:** GPLv2 o posterior  
 
