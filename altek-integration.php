@@ -512,7 +512,11 @@ class WC_Altek_Integration {
         $logger = wc_get_logger();
         $logger->info($message, ['source' => self::LOG_SOURCE]);
     }
-    // (EN) Add an icon on our custom action keeping the label visible
+}
+
+new WC_Altek_Integration();
+
+ // (EN) Add an icon on our custom action keeping the label visible
     add_action('admin_head', function () {
         // (EN) Limit to Orders list screen
         if ( function_exists('get_current_screen') ) {
@@ -534,9 +538,6 @@ class WC_Altek_Integration {
         </style>
         <?php
     });
-}
-
-new WC_Altek_Integration();
 
 /**
  * Frontend admin JS file output (inline generator):
