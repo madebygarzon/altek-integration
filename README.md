@@ -2,7 +2,7 @@
 
 **Autor:** Ing. Carlos Garzón  
 **Versión:** 1.0.0  
-**Licencia:** GPLv2 o posterior  
+**Licencia:** GPLv2
 
 ---
 
