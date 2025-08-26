@@ -24,7 +24,7 @@ Entre sus características principales:
 ## ⚙️ Instalación
 
 1. Descargar o clonar el repositorio en tu equipo.  
-2. Copiar la carpeta del plugin al directorio: wp-content/plugins/altek-integration
+2. Copiar la carpeta del plugin al directorio: wp-content/plugins
 3. Dentro de esta carpeta deben existir al menos dos archivos:
 - `altek-integration.php` (código principal del plugin).  
 - `assets-wc-altek.js` (lógica JS para manejar los clics en el botón de envío).  
