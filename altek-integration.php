@@ -2,12 +2,20 @@
 /**
  * Plugin Name: ALTEK Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     5.0.0
+ * Version:     6.5.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+add_action('admin_enqueue_scripts', function($hook) {
+    // (EN) Load SweetAlert2 from CDN on Orders list page only
+    if ($hook === 'edit.php' && isset($_GET['post_type']) && $_GET['post_type'] === 'shop_order') {
+        wp_enqueue_script('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11', [], null, true);
+        wp_enqueue_style('sweetalert2', 'https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css', [], null);
+    }
+});
 
 class WC_Altek_Integration {
     private $last_excluded = array();
@@ -249,7 +257,21 @@ class WC_Altek_Integration {
             wp_send_json_error(['message' => $result->get_error_message()], 500);
         }
 
-        wp_send_json_success(['message' => 'sent']);
+        if (is_array($result) && !empty($result['idempotent'])) {
+            wp_send_json_success([
+                'message' => 'ALTEK: Cotización ' . $result['altek_id'] . ' (ya existía, no duplicada).',
+                'idempotent' => true,
+                'altek_id' => $result['altek_id'],
+            ]);
+        } elseif (is_array($result) && !empty($result['created'])) {
+            wp_send_json_success([
+                'message' => 'ALTEK: Cotización ' . $result['altek_id'] . ' creada y enviada.',
+                'created' => true,
+                'altek_id' => $result['altek_id'],
+            ]);
+        }
+
+        wp_send_json_success(['message' => 'Pedido enviado a ALTEK']);
     }
 
     // (EN) Handle bulk orders send via AJAX (used for bulk UI hook too).
@@ -558,7 +580,7 @@ class WC_Altek_Integration {
     }
 
     try {
-        // --- 1. Verificar si ya existe la cotización (IDEMPOTENCIA) ---
+        // (EN) 1. Idempotency check
         $order_id = (int)$payload['order_id'];
         $sqlCheck = "SELECT id FROM \"{$schema}\".\"cotizaciones\" WHERE idcotizacionweb = '$order_id' LIMIT 1";
         $res = pg_query($conn, $sqlCheck);
@@ -568,10 +590,10 @@ class WC_Altek_Integration {
             pg_query($conn, 'ROLLBACK');
             $order->add_order_note('ALTEK: Cotización '.$row['id'].' (idempotente).');
             update_post_meta($order->get_id(), '_altek_idcotizacion', (int)$row['id']);
-            return true;
+            return ['idempotent' => true, 'altek_id' => (int)$row['id']];
         }
 
-        // --- 2. Resolver SKUs -> iditem ---
+        // (EN) 2. Resolve SKUs to item IDs
         $skuList = array_values(array_unique(array_map(function($i) {
             return $this->normalize_altek_sku((string)$i['sku']);
         }, $payload['items'])));
@@ -588,7 +610,7 @@ class WC_Altek_Integration {
             throw new Exception('SKUs no encontrados en '.$schema.'.inv_items: '.implode(', ', $missing));
         }
 
-        // --- 3. Insertar cabecera (cotizaciones) ---
+        // (EN) 3. Insert Order (Headers)
         $ref    = mb_substr($payload['reference'] ?: ('COT. PARA '.$payload['customer']['name']), 0, 60);
         $nombre = pg_escape_string($conn, $payload['customer']['name'] ?? '');
         $phone  = pg_escape_string($conn, $payload['customer']['phone'] ?? '');
@@ -667,9 +689,18 @@ class WC_Altek_Integration {
 
         // Execute DB transaction
         $result = $this->send_order_via_pgsql($order);
+
         if ( is_wp_error($result) ) {
             $order->add_order_note('ALTEK: Error al enviar (DB) - ' . $result->get_error_message());
             return $result;
+        }
+
+        if (is_array($result) && !empty($result['idempotent'])) {
+    
+            return ['idempotent' => true, 'altek_id' => $result['altek_id']];
+        } elseif (is_array($result) && !empty($result['created'])) {
+            
+            return ['created' => true, 'altek_id' => $result['altek_id']];
         }
 
         return true;

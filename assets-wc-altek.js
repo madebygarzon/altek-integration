@@ -17,10 +17,26 @@ jQuery(function ($) {
       order_id: orderId
     })
     .done(function (res) {
+      var msg = (res.data && res.data.message) ? res.data.message : wcAltek.i18n.ok;
+      var icon = 'success';
+      // (EN) Determine icon based on message content (customize as needed)
+      if (/idempotente|ya existía|no duplicada/i.test(msg)) icon = 'info';
+      if (/advertencia|omitido|excluido/i.test(msg)) icon = 'warning';
+      // (EN) Show resultS
       if (res && res.success) {
-        alert(wcAltek.i18n.ok);
+        Swal.fire({
+          icon: icon,
+          title: 'ALTEK',
+          html: msg.replace(/\n/g, '<br>'),
+          confirmButtonText: 'OK'
+        });
       } else {
-        alert(wcAltek.i18n.fail + (res && res.data && res.data.message ? (': ' + res.data.message) : ''));
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          html: (wcAltek.i18n.fail + (res && res.data && res.data.message ? (': ' + res.data.message) : '')).replace(/\n/g, '<br>'),
+          confirmButtonText: 'Cerrar'
+        });
       }
     })
     .fail(function (xhr) {
@@ -37,7 +53,12 @@ jQuery(function ($) {
           }
         }
       } catch (e) {}
-      alert(msg);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        html: msg.replace(/\n/g, '<br>'),
+        confirmButtonText: 'Cerrar'
+      });
     })
     .always(function () {
       $btn.prop('disabled', false).text(originalTitle);
