@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     6.5.0
+ * Version:     7.0.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
