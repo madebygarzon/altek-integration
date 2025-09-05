@@ -259,19 +259,19 @@ class WC_Altek_Integration {
 
         if (is_array($result) && !empty($result['idempotent'])) {
             wp_send_json_success([
-                'message' => 'ALTEK: Cotización ' . $result['altek_id'] . ' (ya existía, no duplicada).',
+                'message'    => $result['message'],
                 'idempotent' => true,
-                'altek_id' => $result['altek_id'],
+                'altek_id'   => $result['altek_id'],
             ]);
         } elseif (is_array($result) && !empty($result['created'])) {
             wp_send_json_success([
-                'message' => 'ALTEK: Cotización ' . $result['altek_id'] . ' creada y enviada.',
-                'created' => true,
+                'message'  => $result['message'],
+                'created'  => true,
                 'altek_id' => $result['altek_id'],
             ]);
         }
 
-        wp_send_json_success(['message' => 'Pedido enviado a ALTEK']);
+        wp_send_json_success(['message' => 'Pedido enviado a ALTEK.']);
     }
 
     // (EN) Handle bulk orders send via AJAX (used for bulk UI hook too).
@@ -588,9 +588,14 @@ class WC_Altek_Integration {
         if (pg_num_rows($res) > 0) {
             $row = pg_fetch_assoc($res);
             pg_query($conn, 'ROLLBACK');
-            $order->add_order_note('ALTEK: Cotización '.$row['id'].' (idempotente).');
+            $note = 'ALTEK: Cotización '.$row['id'].' (idempotente).';
+            $order->add_order_note($note);
             update_post_meta($order->get_id(), '_altek_idcotizacion', (int)$row['id']);
-            return ['idempotent' => true, 'altek_id' => (int)$row['id']];
+            return [
+                'idempotent' => true,
+                'altek_id'   => (int)$row['id'],
+                'message'    => $note,
+            ];
         }
 
         // (EN) 2. Resolve SKUs to item IDs
@@ -653,9 +658,11 @@ class WC_Altek_Integration {
 
         if (!pg_query($conn, 'COMMIT')) throw new Exception(pg_last_error($conn) ?: 'Fallo commit');
 
-        $order->add_order_note('ALTEK: Cotización '.$idcot.' creada.');
+        $note = 'ALTEK: Cotización '.$idcot.' creada.';
+        $order->add_order_note($note);
         update_post_meta($order->get_id(), '_altek_idcotizacion', $idcot);
-        return true;
+        // (ES) Retornamos detalles para que la respuesta AJAX pueda replicar la nota exacta
+        return ['created' => true, 'altek_id' => $idcot, 'message' => $note];
 
     } catch (Exception $e) {
         pg_query($conn, 'ROLLBACK');
@@ -696,11 +703,9 @@ class WC_Altek_Integration {
         }
 
         if (is_array($result) && !empty($result['idempotent'])) {
-    
-            return ['idempotent' => true, 'altek_id' => $result['altek_id']];
+            return $result;
         } elseif (is_array($result) && !empty($result['created'])) {
-            
-            return ['created' => true, 'altek_id' => $result['altek_id']];
+            return $result;
         }
 
         return true;
