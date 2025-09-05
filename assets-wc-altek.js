@@ -24,7 +24,20 @@ jQuery(function ($) {
       }
     })
     .fail(function (xhr) {
-      alert(wcAltek.i18n.fail + ' (' + xhr.status + ')');
+      var msg = wcAltek.i18n.fail + ' (' + xhr.status + ')';
+      try {
+        var json = xhr.responseJSON;
+        if (json && json.data && json.data.message) {
+          msg += ' - ' + json.data.message;
+        } else if (xhr.responseText) {
+          // Try parse in case server didn't set proper headers
+          var data = JSON.parse(xhr.responseText);
+          if (data && data.data && data.data.message) {
+            msg += ' - ' + data.data.message;
+          }
+        }
+      } catch (e) {}
+      alert(msg);
     })
     .always(function () {
       $btn.prop('disabled', false).text(originalTitle);

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     1.0.1
+ * Version:     5.0.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -10,7 +10,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class WC_Altek_Integration {
-    private array $last_excluded = [];
+    private $last_excluded = array();
     const OPTION_KEY = 'wc_altek_settings';
     const NONCE_KEY  = 'wc_altek_nonce';
     const ACTION_AJAX_SINGLE = 'altek_send_order';
@@ -52,6 +52,14 @@ class WC_Altek_Integration {
         );
     }
 
+    // (EN) Normalize SKU to 9 digits with leading zeros if numeric and <9 digits.
+    private function normalize_altek_sku($sku) {
+        if (ctype_digit($sku) && strlen($sku) < 9) {
+            return str_pad($sku, 9, '0', STR_PAD_LEFT);
+        }
+        return $sku;
+    }
+
     // (EN) Register settings fields.
     public function register_settings() {
         register_setting(self::OPTION_KEY, self::OPTION_KEY);
@@ -64,11 +72,17 @@ class WC_Altek_Integration {
             },
             self::OPTION_KEY
         );
-        add_settings_field('endpoint', 'Endpoint ALTEK', [$this, 'field_endpoint'], self::OPTION_KEY, 'wc_altek_main');
-        add_settings_field('api_key', 'API Key', [$this, 'field_api_key'], self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_host',   'DB Host',   [$this, 'field_db_host'],   self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_port',   'DB Port',   [$this, 'field_db_port'],   self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_name',   'DB Name',   [$this, 'field_db_name'],   self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_user',   'DB User',   [$this, 'field_db_user'],   self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_pass',   'DB Pass',   [$this, 'field_db_pass'],   self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('schema',    'Schema (PostgreSQL)', [$this, 'field_schema'], self::OPTION_KEY, 'wc_altek_main');
+        add_settings_field('db_sslmode','SSL Mode',  [$this, 'field_db_sslmode'],self::OPTION_KEY, 'wc_altek_main');
         add_settings_field('timeout', 'Timeout (seg)', [$this, 'field_timeout'], self::OPTION_KEY, 'wc_altek_main');
         add_settings_field('debug', 'Debug (logs detallados)', [$this, 'field_debug'], self::OPTION_KEY, 'wc_altek_main');
         add_settings_field('exclusions', 'Excluir productos (SKU o ID)', [$this, 'field_exclusions'], self::OPTION_KEY, 'wc_altek_main');
+
     }
 
     // (EN) Parse exclusions string into two sets: 'skus' (lowercased) and 'ids' (ints)
@@ -130,6 +144,15 @@ class WC_Altek_Integration {
         );
     }
 
+    public function field_db_host()   { $o=$this->get_options(); printf('<input type="text" name="%s[db_host]" value="%s" class="regular-text" placeholder="altek.gsrv.co"/>', esc_attr(self::OPTION_KEY), esc_attr($o['db_host'] ?? '')); }
+    public function field_db_port()   { $o=$this->get_options(); printf('<input type="number" name="%s[db_port]" value="%s" class="small-text" min="1" placeholder="5432"/>', esc_attr(self::OPTION_KEY), esc_attr($o['db_port'] ?? 5432)); }
+    public function field_db_name()   { $o=$this->get_options(); printf('<input type="text" name="%s[db_name]" value="%s" class="regular-text" placeholder="AltekDev"/>', esc_attr(self::OPTION_KEY), esc_attr($o['db_name'] ?? '')); }
+    public function field_db_user()   { $o=$this->get_options(); printf('<input type="text" name="%s[db_user]" value="%s" class="regular-text" placeholder="postgres"/>', esc_attr(self::OPTION_KEY), esc_attr($o['db_user'] ?? '')); }
+    public function field_db_pass()   { $o=$this->get_options(); printf('<input type="password" name="%s[db_pass]" value="%s" class="regular-text" autocomplete="new-password" placeholder="********"/>', esc_attr(self::OPTION_KEY), esc_attr($o['db_pass'] ?? '')); }
+    public function field_schema()    { $o=$this->get_options(); $v=$o['schema'] ?? 'public'; printf('<select name="%s[schema]"><option value="public" %s>public</option><option value="prev" %s>prev</option></select>', esc_attr(self::OPTION_KEY), selected('public',$v,false), selected('prev',$v,false)); }
+    public function field_db_sslmode(){ $o=$this->get_options(); $v=$o['db_sslmode'] ?? 'disable'; printf('<select name="%s[db_sslmode]"><option value="disable" %s>disable (no SSL)</option><option value="require" %s>require</option><option value="prefer" %s>prefer</option><option value="allow" %s>allow</option><option value="verify-full" %s>verify-full</option></select><p class="description">El servidor actual reportó no soportar SSL; usa "disable" salvo que habiliten TLS.</p>', esc_attr(self::OPTION_KEY), selected('disable',$v,false), selected('require',$v,false), selected('prefer',$v,false), selected('allow',$v,false), selected('verify-full',$v,false)); }
+
+
     // (EN) Settings page UI.
     public function render_settings_page() {
         ?>
@@ -149,11 +172,18 @@ class WC_Altek_Integration {
 
     private function get_options() {
         $defaults = [
-            'endpoint' => '',
-            'api_key'  => '',
-            'timeout'  => 20,
-            'debug'    => '0',
-            'exclusions' => '', // (EN) New: comma/line-separated SKUs or product IDs to skip
+            'endpoint'   => '',
+            'api_key'    => '',
+            'timeout'    => 20,
+            'debug'      => '0',
+            'exclusions' => '',
+            'schema'     => 'public',
+            'db_host'    => 'altek.gsrv.co',
+            'db_port'    => 5432,
+            'db_name'    => 'AltekDev',
+            'db_user'    => 'postgres',
+            'db_pass'    => '',
+            'db_sslmode' => 'disable', // server dijo "does not support SSL"
         ];
         $opts = get_option(self::OPTION_KEY, []);
         return wp_parse_args($opts, $defaults);
@@ -421,66 +451,206 @@ class WC_Altek_Integration {
         return $data;
     }
 
-    // (EN) Execute the remote POST to ALTEK with headers.
-    private function altek_remote_post(array $payload) {
-        $opts = $this->get_options();
-        if ( empty($opts['endpoint']) ) {
-            return new WP_Error('altek_no_endpoint', 'Endpoint ALTEK no configurado');
+    // (EN) Build the minimal payload that we will use to insert into PostgreSQL directly.
+    private function altek_build_orders_payload_minimal( WC_Order $order ): array {
+        $opts   = $this->get_options();
+        $schema = !empty($opts['schema']) ? (string)$opts['schema'] : 'public';
+
+        // Parse exclusions (reuse your existing logic).
+        $rawEx = is_string($opts['exclusions'] ?? '') ? $opts['exclusions'] : '';
+        $ex    = $this->parse_exclusions($rawEx);
+
+        $this->last_excluded = [];
+        $items = [];
+
+        foreach ( $order->get_items() as $item_id => $item ) {
+            /** @var WC_Order_Item_Product $item */
+            $product = $item->get_product();
+
+            // Skip excluded products by SKU/ID
+            if ( $this->product_is_excluded($product, $ex) ) {
+                $this->last_excluded[] = [
+                    'item_id'   => (string)$item_id,
+                    'productId' => $product ? (string)$product->get_id() : null,
+                    'sku'       => $product ? $product->get_sku() : null,
+                    'name'      => $item->get_name(),
+                    'qty'       => (float)$item->get_quantity(),
+                ];
+                continue;
+            }
+
+            $sku = $product ? (string)$product->get_sku() : '';
+            // Unit price without taxes (same used in API tests)
+            $unit_price_wo_tax = (float) $order->get_item_total($item, false);
+            $discount = 0; // TODO: map coupons if needed
+
+            $items[] = [
+                'sku'     => $sku,
+                'name'    => (string) $item->get_name(),
+                'qty'     => (float) $item->get_quantity(),
+                'price'   => $unit_price_wo_tax,
+                'discount'=> $discount,
+            ];
         }
 
-        $args = [
-            'timeout' => max(5, (int)$opts['timeout']),
-            'headers' => [
-                'Content-Type'  => 'application/json',
-                // (EN) If ALTEK requires bearer or custom header, adjust here:
-                'Authorization' => ! empty($opts['api_key']) ? 'Bearer ' . $opts['api_key'] : '',
-                'X-From'        => 'WooCommerce',
+        return [
+            'schema'    => $schema,
+            'order_id'  => (int) $order->get_id(),
+            'customer'  => [
+                'name'  => $order->get_formatted_billing_full_name(),
+                'phone' => $order->get_billing_phone(),
+                'email' => $order->get_billing_email(),
             ],
-            'body'    => wp_json_encode($payload),
+            'reference' => 'Pedido Woo #'.$order->get_id(),
+            'items'     => $items,
         ];
-
-        if ( $opts['debug'] === '1' ) {
-            $this->log('POST ' . $opts['endpoint']);
-            $this->log('Payload: ' . wp_json_encode($payload));
-        }
-
-        $response = wp_remote_post($opts['endpoint'], $args);
-
-        if ( is_wp_error($response) ) {
-            return $response;
-        }
-
-        $code = (int) wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-
-        if ( $opts['debug'] === '1' ) {
-            $this->log('Response code: ' . $code);
-            $this->log('Response body: ' . $body);
-        }
-
-        if ( $code < 200 || $code >= 300 ) {
-            return new WP_Error('altek_bad_status', 'ALTEK devolvió estado ' . $code . ' - ' . $body);
-        }
-
-        return true;
     }
 
-    // (EN) Public method to send an order to ALTEK.
+    // (EN) Open a pgsql connection using plugin settings, with clear errors.
+    private function pg_open() {
+        if ( ! function_exists('pg_connect') ) {
+            return new WP_Error('altek_pg_ext', 'Extensión PHP "pgsql" no está instalada o habilitada en el servidor.');
+        }
+
+        $o = $this->get_options();
+
+        $parts = [
+            "host='".addslashes($o['db_host'])."'",
+            "port='".intval($o['db_port'])."'",
+            "dbname='".addslashes($o['db_name'])."'",
+            "user='".addslashes($o['db_user'])."'",
+            "password='".addslashes($o['db_pass'])."'", // keep raw here
+            "sslmode='".addslashes($o['db_sslmode'] ?: 'disable')."'", // current server: no SSL
+            "connect_timeout='10'",
+        ];
+        $conn_str = implode(' ', $parts);
+
+        $conn = @pg_connect($conn_str);
+        if ( ! $conn ) {
+            // (EN) pg_last_error requires a connection; use generic last PHP error as hint.
+            $hint = '';
+            if (function_exists('error_get_last')) {
+                $last = error_get_last();
+                if (!empty($last['message'])) $hint = ' Detalle: ' . $last['message'];
+            }
+            return new WP_Error('altek_pg_connect', 'No se pudo conectar a Postgres. Revisa host/puerto/usuario/clave/firewall/sslmode.' . $hint);
+        }
+        return $conn;
+    }
+
+
+    // (EN) Insert order into PostgreSQL using a single transaction with idempotency.
+ 
+    private function send_order_via_pgsql( WC_Order $order ) {
+    $o      = $this->get_options();
+    $schema = $o['schema'] ?: 'public';
+    $conn = $this->pg_open();
+    if ( is_wp_error($conn) ) return $conn;
+
+    $payload = $this->altek_build_orders_payload_minimal($order);
+    if (empty($payload['items'])) {
+        $order->add_order_note('ALTEK: No se envió. Todos los productos del pedido están excluidos por configuración.');
+        return new WP_Error('altek_all_excluded', 'Todos los productos del pedido están excluidos.');
+    }
+
+    if (!pg_query($conn, 'BEGIN')) {
+        return new WP_Error('altek_pg_begin', 'No se pudo iniciar transacción.');
+    }
+
+    try {
+        // --- 1. Verificar si ya existe la cotización (IDEMPOTENCIA) ---
+        $order_id = (int)$payload['order_id'];
+        $sqlCheck = "SELECT id FROM \"{$schema}\".\"cotizaciones\" WHERE idcotizacionweb = '$order_id' LIMIT 1";
+        $res = pg_query($conn, $sqlCheck);
+        if (!$res) throw new Exception(pg_last_error($conn) ?: 'Fallo al consultar idempotencia');
+        if (pg_num_rows($res) > 0) {
+            $row = pg_fetch_assoc($res);
+            pg_query($conn, 'ROLLBACK');
+            $order->add_order_note('ALTEK: Cotización '.$row['id'].' (idempotente).');
+            update_post_meta($order->get_id(), '_altek_idcotizacion', (int)$row['id']);
+            return true;
+        }
+
+        // --- 2. Resolver SKUs -> iditem ---
+        $skuList = array_values(array_unique(array_map(function($i) {
+            return $this->normalize_altek_sku((string)$i['sku']);
+        }, $payload['items'])));
+        $skuList = array_filter($skuList, fn($s)=> $s !== '');
+        if (empty($skuList)) throw new Exception('Los productos no tienen SKU. Defina SKU o configure exclusiones.');
+        $skuIn  = implode("','", array_map(fn($s) => pg_escape_string($conn, $s), $skuList));
+        $sqlSku = "SELECT id, item FROM \"{$schema}\".\"inv_items\" WHERE item IN ('$skuIn')";
+        $rSku = pg_query($conn, $sqlSku);
+        if (!$rSku) throw new Exception(pg_last_error($conn) ?: 'Fallo al resolver SKUs');
+        $skuMap = [];
+        while ($r = pg_fetch_assoc($rSku)) { $skuMap[$r['item']] = (int)$r['id']; }
+        $missing = array_values(array_filter($skuList, fn($s)=> !isset($skuMap[$s])));
+        if (!empty($missing)) {
+            throw new Exception('SKUs no encontrados en '.$schema.'.inv_items: '.implode(', ', $missing));
+        }
+
+        // --- 3. Insertar cabecera (cotizaciones) ---
+        $ref    = mb_substr($payload['reference'] ?: ('COT. PARA '.$payload['customer']['name']), 0, 60);
+        $nombre = pg_escape_string($conn, $payload['customer']['name'] ?? '');
+        $phone  = pg_escape_string($conn, $payload['customer']['phone'] ?? '');
+        $email  = pg_escape_string($conn, $payload['customer']['email'] ?? '');
+        $ref    = pg_escape_string($conn, $ref);
+        $sqlH = "INSERT INTO \"{$schema}\".\"cotizaciones\" (
+            fecha, referencia, tipoproceso, idusuario, tipocliente, idcliente,
+            idciudadinstalacion, descuento, anticipo, estado, causalnegacion,
+            especial, idoc, embalaje, version, idproyecto, iva, idsolicitud,
+            vrservicios, nombrecliente, telefonos, email, idcotizacionweb
+        ) VALUES (
+            CURRENT_DATE, '$ref', 0, 1, 0, 0,
+            0, 0, 0, 0, 0,
+            FALSE, 0, 0, 1, 0, 19, 0,
+            0, '$nombre', '$phone', '$email', '$order_id'
+        ) RETURNING id";
+        $rH = pg_query($conn, $sqlH);
+        if (!$rH) throw new Exception(pg_last_error($conn) ?: 'Fallo insert cotización');
+        $idcot = (int)pg_fetch_result($rH, 0, 'id');
+
+        // --- 4. Insertar productos (itemsxcotizacion) ---
+        foreach ($payload['items'] as $it) {
+            $sku    = (string)$it['sku'];
+            $iditem = $skuMap[$sku] ?? null;
+            if (!$iditem) throw new Exception('SKU sin resolver: '.$sku);
+            $name   = pg_escape_string($it['name']);
+            $qty    = (float)$it['qty'];
+            $price  = (float)$it['price'];
+            $desc   = (float)($it['discount'] ?? 0);
+            $sqlI = "INSERT INTO \"{$schema}\".\"itemsxcotizacion\" (
+                idcotizacion, detalle, iditem, nombre, cantidad, precioventa, iva,
+                especial, espedido, porcentajedescuento
+            ) VALUES (
+                '$idcot', 'COLECCION WOO', '$iditem', '$name', '$qty', '$price', 19,
+                FALSE, FALSE, '$desc'
+            )";
+            $ok = pg_query($conn, $sqlI);
+            if (!$ok) throw new Exception(pg_last_error($conn) ?: ('Fallo insert ítem: '.$sku));
+        }
+
+        if (!pg_query($conn, 'COMMIT')) throw new Exception(pg_last_error($conn) ?: 'Fallo commit');
+
+        $order->add_order_note('ALTEK: Cotización '.$idcot.' creada.');
+        update_post_meta($order->get_id(), '_altek_idcotizacion', $idcot);
+        return true;
+
+    } catch (Exception $e) {
+        pg_query($conn, 'ROLLBACK');
+        return new WP_Error('altek_pg_tx', $e->getMessage());
+    }
+}
+
+
+   // (EN) Always use direct PostgreSQL mode (no HTTP API).
     private function send_order_to_altek($order_id) {
         $order = wc_get_order($order_id);
         if ( ! $order ) {
             return new WP_Error('altek_no_order', 'Pedido no encontrado');
         }
 
-        $payload = $this->altek_build_payload($order);
-
-        // (EN) If all items were excluded, block and inform
-        if (empty($payload['items'])) {
-            $order->add_order_note('ALTEK: No se envió. Todos los productos del pedido están excluidos por configuración.');
-            return new WP_Error('altek_all_excluded', 'Todos los productos del pedido están excluidos.');
-        }
-
-        // (EN) If some items were excluded, annotate which ones
+        // Build minimal payload to honor exclusions (and note excluded items)
+        $payload = $this->altek_build_orders_payload_minimal($order);
         if (!empty($this->last_excluded)) {
             $labels = array_map(function($x) {
                 $parts = [];
@@ -494,17 +664,17 @@ class WC_Altek_Integration {
                 "ALTEK: Se omitieron " . count($this->last_excluded) . " producto(s):\n- " . implode("\n- ", $labels)
             );
         }
-        $result  = $this->altek_remote_post($payload);
 
-        // (EN) Optional: add order note on success/fail.
+        // Execute DB transaction
+        $result = $this->send_order_via_pgsql($order);
         if ( is_wp_error($result) ) {
-            $order->add_order_note('ALTEK: Error al enviar - ' . $result->get_error_message());
-        } else {
-            $order->add_order_note('ALTEK: Enviado correctamente');
+            $order->add_order_note('ALTEK: Error al enviar (DB) - ' . $result->get_error_message());
+            return $result;
         }
 
-        return $result;
+        return true;
     }
+
 
     // (EN) Simple logger wrapper.
     private function log($message) {
