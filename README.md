@@ -123,7 +123,7 @@ Este glosario cubre **errores**, **advertencias**, **alertas**, **mensajes de é
 | **ALTEK: Se omitieron X producto(s):**                        | Productos excluidos del envío por configuración de exclusiones.    | Revisar exclusiones (SKU/ID).    |
 | **ALTEK: No se envió. Todos los productos del pedido están excluidos por configuración.** | Ningún producto del pedido es válido para enviar.                 | Ajustar exclusiones o pedido.    |
 | **ALTEK: SKU sin resolver: [SKU]**                            | El SKU no está registrado en ALTEK o no cumple el formato.        | Registrar el SKU en ALTEK y reintentar. |
-| **ALTEK: Cotización [ID] (idempotente).**                     | El pedido ya fue transmitido previamente; no se duplica.           | Nada que hacer, el registro ya existe. |
+| **ALTEK: Cotización [ID] (ya fué creada).**                     | El pedido ya fue transmitido previamente; no se duplica.           | Nada que hacer, el registro ya existe. |
 
 ---
 

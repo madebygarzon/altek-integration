@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: ALTEK Integration for WooCommerce
+ * Plugin Name: ALTEK Plugin Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     7.0.0
+ * Version:     8.5.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -62,6 +62,7 @@ class WC_Altek_Integration {
 
     // (EN) Normalize SKU to 9 digits with leading zeros if numeric and <9 digits.
     private function normalize_altek_sku($sku) {
+        $sku = trim((string)$sku); // Elimina espacios y asegúrate de que es string
         if (ctype_digit($sku) && strlen($sku) < 9) {
             return str_pad($sku, 9, '0', STR_PAD_LEFT);
         }
@@ -222,7 +223,7 @@ class WC_Altek_Integration {
         wp_enqueue_script(
             'wc-altek-admin',
             plugin_dir_url(__FILE__) . 'assets-wc-altek.js',
-            ['jquery'],
+            ['jquery', 'sweetalert2'],
             '1.0.0',
             true
         );
@@ -588,7 +589,7 @@ class WC_Altek_Integration {
         if (pg_num_rows($res) > 0) {
             $row = pg_fetch_assoc($res);
             pg_query($conn, 'ROLLBACK');
-            $note = 'ALTEK: Cotización '.$row['id'].' (idempotente).';
+            $note = 'ALTEK: Cotización '.$row['id'].' (ya fué creada).';
             $order->add_order_note($note);
             update_post_meta($order->get_id(), '_altek_idcotizacion', (int)$row['id']);
             return [
@@ -638,7 +639,9 @@ class WC_Altek_Integration {
 
         // --- 4. Insertar productos (itemsxcotizacion) ---
         foreach ($payload['items'] as $it) {
-            $sku    = (string)$it['sku'];
+            //$sku    = (string)$it['sku'];
+            $sku = $this->normalize_altek_sku((string)$it['sku']);
+            $this->log("DEBUG SKU: original='{$it['sku']}', normalizado='$sku'");
             $iditem = $skuMap[$sku] ?? null;
             if (!$iditem) throw new Exception('SKU sin resolver: '.$sku);
             $name   = pg_escape_string($it['name']);
