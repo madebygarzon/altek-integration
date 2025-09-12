@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Plugin Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     11.0.0
+ * Version:     1.0.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -248,9 +248,19 @@ class WC_Altek_Integration {
     public function handle_ajax_single() {
         $this->check_ajax_nonce();
 
+        
         $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
         if ( ! $order_id ) {
             wp_send_json_error(['message' => 'order_id missing'], 400);
+        }
+
+        
+        $order = wc_get_order($order_id);
+        foreach ($order->get_items() as $item_id => $item) {
+            error_log("ITEM $item_id: " . print_r($item->get_data(), true));
+            foreach ($item->get_meta_data() as $meta) {
+                error_log("META {$meta->key}: " . print_r($meta->value, true));
+            }
         }
 
         $result = $this->send_order_to_altek($order_id);
@@ -274,6 +284,7 @@ class WC_Altek_Integration {
 
         wp_send_json_success(['message' => 'Pedido enviado a ALTEK.']);
     }
+
 
     // (EN) Handle bulk orders send via AJAX (used for bulk UI hook too).
     public function handle_ajax_bulk() {
@@ -479,7 +490,6 @@ class WC_Altek_Integration {
         $opts   = $this->get_options();
         $schema = !empty($opts['schema']) ? (string)$opts['schema'] : 'public';
 
-        // Parse exclusions (reuse your existing logic).
         $rawEx = is_string($opts['exclusions'] ?? '') ? $opts['exclusions'] : '';
         $ex    = $this->parse_exclusions($rawEx);
 
@@ -487,33 +497,33 @@ class WC_Altek_Integration {
         $items = [];
 
         foreach ( $order->get_items() as $item_id => $item ) {
-            /** @var WC_Order_Item_Product $item */
             $product = $item->get_product();
 
-            // Skip excluded products by SKU/ID
-            if ( $this->product_is_excluded($product, $ex) ) {
+            // SI ES PADRE DE BUNDLE (agrupador, sin SKU), omite:
+            $bundled_items = $item->get_meta('_bundled_items');
+            if (!empty($bundled_items)) {
+                continue; // Salta el agrupador, NUNCA tiene SKU ni se debe enviar a ALTEK
+            }
+
+            // TODOS los demás (normales y bundle hijos) se procesan igual:
+            if ($product && $product->get_sku() && !$this->product_is_excluded($product, $ex)) {
+                $items[] = [
+                    'sku'     => $product->get_sku(),
+                    'name'    => (string) $item->get_name(),
+                    'qty'     => (float) $item->get_quantity(),
+                    'price'   => (float) $order->get_item_total($item, false),
+                    'discount'=> 0, // TODO: discount si es necesario
+                ];
+            } else if ($product && $this->product_is_excluded($product, $ex)) {
                 $this->last_excluded[] = [
                     'item_id'   => (string)$item_id,
-                    'productId' => $product ? (string)$product->get_id() : null,
-                    'sku'       => $product ? $product->get_sku() : null,
+                    'productId' => $product->get_id(),
+                    'sku'       => $product->get_sku(),
                     'name'      => $item->get_name(),
                     'qty'       => (float)$item->get_quantity(),
                 ];
-                continue;
             }
-
-            $sku = $product ? (string)$product->get_sku() : '';
-            // Unit price without taxes (same used in API tests)
-            $unit_price_wo_tax = (float) $order->get_item_total($item, false);
-            $discount = 0; // TODO: map coupons if needed
-
-            $items[] = [
-                'sku'     => $sku,
-                'name'    => (string) $item->get_name(),
-                'qty'     => (float) $item->get_quantity(),
-                'price'   => $unit_price_wo_tax,
-                'discount'=> $discount,
-            ];
+            // Si no tiene SKU, no lo envía ni lo marca como excluido.
         }
 
         return [
@@ -727,23 +737,23 @@ new WC_Altek_Integration();
 
  // (EN) Add an icon on our custom action keeping the label visible
     add_action('admin_head', function () {
-        // (EN) Limit to Orders list screen
         if ( function_exists('get_current_screen') ) {
             $screen = get_current_screen();
             if ( ! $screen || $screen->id !== 'edit-shop_order' ) return;
         }
         ?>
         <style>
-          /* (EN) Target our button with high specificity */
-          a.button.wc-action-button.wc-action-button-altek-send-order.altek-send-order::after {
-            /* (EN) Use Dashicons glyph (export/migrate); change code if you prefer another */
-            content: "\f19f" !important;
+        a.button.wc-action-button.wc-action-button-altek-send-order.altek-send-order::after {
+            content: "\f344"; /* Dashicon arrow-right-alt */
             font-family: Dashicons !important;
-            font-size: 16px;
+            font-size: 15px;
             line-height: 1;
             vertical-align: middle;
-            margin-left: .35em;
-          }
+            margin-top: 6px;
+            font-weight: normal;
+            speak: never;
+            text-transform: none;
+        }
         </style>
         <?php
     });
