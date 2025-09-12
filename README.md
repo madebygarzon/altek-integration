@@ -81,7 +81,32 @@ SKU-ABC-999
 
 - No dejar credenciales ni endpoints “quemados” en el código; siempre usar la página de ajustes.  
 - El envío se realiza **server-to-server** desde WordPress, sin exponer credenciales al cliente.  
-- Solo los usuarios con capacidad `manage_woocommerce` pueden ejecutar los envíos.   
+- Solo los usuarios con capacidad `manage_woocommerce` pueden ejecutar los envíos.
+
+---
+
+## 🔔 Sistema de alertas
+
+El plugin comunica el resultado de cada envío mediante diferentes canales para que el administrador pueda diagnosticar y actuar rápidamente:
+
+- **Ventanas emergentes (SweetAlert2):** al enviar un pedido desde la lista, se muestra un `popup` indicando el resultado. Los íconos cambian según el mensaje: éxito por defecto, `info` si el pedido ya existía y `warning` si hubo elementos omitidos; en caso de error se usa `error`.
+- **Notas del pedido:** todas las respuestas importantes se registran como nota interna, incluyendo productos excluidos, errores de base de datos o cotizaciones generadas.
+- **Acciones masivas:** al ejecutar la acción **Enviar a ALTEK** sobre varios pedidos, el sistema envía cada pedido y añade parámetros `altek_sent` y `altek_fail` a la URL para resumir la cantidad de envíos exitosos o fallidos.
+- **Logs de WooCommerce:** si la opción *Debug* está activa, se escriben mensajes de seguimiento en el registro `altek-integration`.
+- **Respuestas AJAX para desarrolladores:** las rutas `altek_send_order` y `altek_send_orders_bulk` devuelven mensajes estructurados (JSON) que pueden ser consumidos por scripts externos.
+
+### Flujo típico de un envío individual
+
+1. El usuario hace clic en **Enviar a ALTEK** y el botón cambia a “Enviando…”.
+2. Se envía una petición AJAX al servidor; el resultado determina la ventana emergente mostrada y se añade una nota al pedido.
+3. Si todos los productos estaban excluidos o el pedido ya existía, el servidor lo indica claramente y se clasifica como advertencia o información.
+
+### Ejemplos de mensajes
+
+- `ALTEK: Cotización 123 creada.` → popup de éxito y nota en el pedido.
+- `ALTEK: Cotización 123 (ya fué creada).` → popup informativo; evita duplicados.
+- `ALTEK: Se omitieron 2 producto(s): SKU:TEST1…` → popup de advertencia y detalle en la nota.
+- `ALTEK: Error al enviar (DB) - detalle` → popup de error; revisar logs para mayor información.
 
 ---
 
