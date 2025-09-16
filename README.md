@@ -222,6 +222,6 @@ Este glosario cubre **errores**, **advertencias**, **alertas**, **mensajes de é
 ## ✍️ Autor
 
 - Desarrollado por **Carlos Garzón**  
-- Software Engineer Fullstack Web Developer.
+- Software Engineer, Fullstack Web Developer.
 ---
 
