@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Plugin Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -632,13 +632,17 @@ class WC_Altek_Integration {
         $phone  = pg_escape_string($conn, $payload['customer']['phone'] ?? '');
         $email  = pg_escape_string($conn, $payload['customer']['email'] ?? '');
         $ref    = pg_escape_string($conn, $ref);
+        $idusuario = (int) $order->get_customer_id();
+        if (!$idusuario) {
+            $idusuario = 1;
+        }
         $sqlH = "INSERT INTO \"{$schema}\".\"cotizaciones\" (
             fecha, referencia, tipoproceso, idusuario, tipocliente, idcliente,
             idciudadinstalacion, descuento, anticipo, estado, causalnegacion,
             especial, idoc, embalaje, version, idproyecto, iva, idsolicitud,
             vrservicios, nombrecliente, telefonos, email, idcotizacionweb
         ) VALUES (
-            CURRENT_DATE, '$ref', 0, 1, 0, 0,
+            CURRENT_DATE, '$ref', 0, '$idusuario', 0, 0,
             0, 0, 0, 0, 0,
             FALSE, 0, 0, 1, 0, 19, 0,
             0, '$nombre', '$phone', '$email', '$order_id'
