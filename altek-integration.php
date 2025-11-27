@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Plugin Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     4.0.0
+ * Version:     5.0.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -629,18 +629,16 @@ class WC_Altek_Integration {
         // (EN) 3. Insert Order (Headers)
         $ref    = mb_substr($payload['reference'] ?: ('COT. PARA '.$payload['customer']['name']), 0, 60);
         $ref    = pg_escape_string($conn, $ref);
-
         $vendor_user_id = $order->get_user_id();
-
         if ($vendor_user_id) {
             $vendor_user = get_userdata($vendor_user_id);
-            $idusuario = $vendor_user->ID;
+            $id_altek = get_user_meta($vendor_user_id, 'idAltek', true);
+            $idusuario = $id_altek ? (int)$id_altek : 0;
             $nombre_vendedor = $vendor_user->display_name ?: $vendor_user->user_login;
         } else {
             $idusuario = 0;
             $nombre_vendedor = 'Invitado';
         }
-        
         $nombre = pg_escape_string($conn,
             $order->get_billing_company() ?: $order->get_formatted_billing_full_name()
         );
