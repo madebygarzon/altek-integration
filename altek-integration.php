@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ALTEK Plugin Integration for WooCommerce
  * Description: Agrega un botón en la lista de pedidos para enviar el pedido al servidor ALTEK y añade acción masiva + ajustes.
- * Version:     2.0.0
+ * Version:     4.0.0
  * Author:      Ing. Carlos Garzón
  * License:     GPLv2
  */
@@ -628,12 +628,30 @@ class WC_Altek_Integration {
 
         // (EN) 3. Insert Order (Headers)
         $ref    = mb_substr($payload['reference'] ?: ('COT. PARA '.$payload['customer']['name']), 0, 60);
-        $current_user = wp_get_current_user();
-        $idusuario = $current_user->ID ?: 0;
-        $nombre    = pg_escape_string($conn, $current_user->display_name ?: $current_user->user_login);
-        $email     = pg_escape_string($conn, $current_user->user_email ?: 'sin-correo@local');
-        $phone  = pg_escape_string($conn, $payload['customer']['phone'] ?? '');
         $ref    = pg_escape_string($conn, $ref);
+
+        $vendor_user_id = $order->get_user_id();
+
+        if ($vendor_user_id) {
+            $vendor_user = get_userdata($vendor_user_id);
+            $idusuario = $vendor_user->ID;
+            $nombre_vendedor = $vendor_user->display_name ?: $vendor_user->user_login;
+        } else {
+            $idusuario = 0;
+            $nombre_vendedor = 'Invitado';
+        }
+        
+        $nombre = pg_escape_string($conn,
+            $order->get_billing_company() ?: $order->get_formatted_billing_full_name()
+        );
+
+        $phone  = pg_escape_string($conn,
+            $order->get_billing_phone()
+        );
+
+        $email  = pg_escape_string($conn,
+            $order->get_billing_email()
+        );
 
         $sqlH = "INSERT INTO \"{$schema}\".\"cotizaciones\" (
             fecha, referencia, tipoproceso, idusuario, tipocliente, idcliente,
@@ -646,11 +664,14 @@ class WC_Altek_Integration {
             FALSE, 0, 0, 1, 0, 19, 0,
             0, '$nombre', '$phone', '$email', '$order_id'
         ) RETURNING id";
+
         $rH = pg_query($conn, $sqlH);
         if (!$rH) throw new Exception(pg_last_error($conn) ?: 'Fallo insert cotización');
+
         $idcot = (int)pg_fetch_result($rH, 0, 'id');
 
-        // --- 4. Insertar productos (itemsxcotizacion) ---
+
+        // --- 4. Insert products (itemsxcotizacion) ---
         foreach ($payload['items'] as $it) {
             //$sku    = (string)$it['sku'];
             $sku = $this->normalize_altek_sku((string)$it['sku']);
