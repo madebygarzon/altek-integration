@@ -34,5 +34,13 @@ WordPress/WooCommerce integration plugin that sends orders directly to ALTEK (Po
 ## Business Impact
 Enables reliable e-commerce → operations synchronization, improving fulfillment flow and reducing manual errors.
 
+---
 ## Author
-**Carlos Garzón**
+
+- Created by **Carlos Garzón**
+- Software Engineer, Fullstack Developer.
+---
+
+## Licenses
+
+MIT
